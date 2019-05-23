@@ -1,6 +1,11 @@
+#include <StaticThreadController.h>
+#include <Thread.h>
+#include <ThreadController.h>
+
 #include <Wire.h>
 #include "gyro_accel.h"
 #include <Servo.h>
+
 // Defining constants
 #define dt 20                       // time difference in milli seconds
 #define rad2degree 57.3              // Radian to degree conversion
@@ -44,6 +49,8 @@ bool f;
 
 Servo servo;
 int directionn = 0; //front=8, back=2, left=4, right=6
+
+Thread angleThread = Thread();
 // *********************************************************************
 // Main Code
 void setup(){
@@ -76,6 +83,9 @@ void setup(){
   // Do nothing
   }
   correction_factor = (gyro_z_scalled - z0) / 10;
+
+  angleThread.onRun(readData);
+  angleThread.setInterval(dt);
 }
 void loop(){
   t=millis(); 
@@ -84,11 +94,14 @@ void loop(){
  
   //Serial.print(gyro_z_scalled);
   //Serial.print("\t");
-  integral += (gyro_z_scalled + correction_factor) * dt / 1000;
+  /*integral += (gyro_z_scalled + correction_factor) * dt / 1000;
   Serial.print(integral);
   Serial.print("\t");
 
-  Serial.println(((float)(millis()-t)/(float)dt)*100);  // Не знаю, что это, но без этого не работает. Магия!
+  Serial.println(((float)(millis()-t)/(float)dt)*100);  // Не знаю, что это, но без этого не работает. Магия!*/
+
+  if (angleThread.shouldRun())
+    angleThread.run();
 
   if (f)
   {
@@ -97,10 +110,6 @@ void loop(){
   }
   else
     forward();
-  
-  while((millis()-t) < dt){ // Making sure the cycle time is equal to dt  // И это тоже
-  // Do nothing
-  }
 }
 
 void forward()
@@ -141,7 +150,8 @@ void turn(void (*dir)(), int angle)
   stopp();
   while(abs(integral - start) < angle)
   {
-    readData();
+    if (angleThread.shouldRun())
+      angleThread.run();
     (*dir)();
   }
   stopp();
@@ -150,9 +160,10 @@ void turn(void (*dir)(), int angle)
 void readData()
 {
   MPU6050_ReadData();
-  integral += (gyro_z_scalled + correction_factor) * dt / 1000;
+  //integral += (gyro_z_scalled + correction_factor) * dt / 1000;
+  integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000;
   Serial.println(integral);
-  while((millis()-t) < dt){ // Making sure the cycle time is equal to dt  // И это тоже
+  /*while((millis()-t) < dt){ // Making sure the cycle time is equal to dt  // И это тоже
   // Do nothing
-  }
+  }*/
 }
