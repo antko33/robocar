@@ -39,7 +39,7 @@
 // *********************************************************************
 unsigned long t=0; // Time Variables
 float angle_x_gyro=0,angle_y_gyro=0,angle_z_gyro=0,angle_x_accel=0,angle_y_accel=0,angle_z_accel=0,angle_x=0,angle_y=0,angle_z=0;
-float integral=0, t0;
+float integral=0, t0, correction_factor;
 bool f;
 
 Servo servo;
@@ -47,7 +47,7 @@ int directionn = 0; //front=8, back=2, left=4, right=6
 // *********************************************************************
 // Main Code
 void setup(){
-  Serial.begin(115200);
+  Serial.begin(9600);
   Wire.begin();
 
   // Calibration
@@ -70,6 +70,12 @@ void setup(){
     
   t=millis(); 
   f = true;
+
+  float z0 = gyro_z_scalled;
+  while((millis()-t) < 10 * dt){ // Making sure the cycle time is equal to dt  // И это тоже
+  // Do nothing
+  }
+  correction_factor = (gyro_z_scalled - z0) / 10;
 }
 void loop(){
   t=millis(); 
@@ -78,48 +84,75 @@ void loop(){
  
   //Serial.print(gyro_z_scalled);
   //Serial.print("\t");
-  integral += gyro_z_scalled * dt / 1000 + 0.0001;
+  integral += (gyro_z_scalled + correction_factor) * dt / 1000;
   Serial.print(integral);
   Serial.print("\t");
 
   Serial.println(((float)(millis()-t)/(float)dt)*100);  // Не знаю, что это, но без этого не работает. Магия!
+
+  if (f)
+  {
+    turn(left, 90);
+    f = false;
+  }
+  else
+    forward();
   
   while((millis()-t) < dt){ // Making sure the cycle time is equal to dt  // И это тоже
   // Do nothing
   }
-
-  forward();
 }
 
 void forward()
 {
-  // back wheels are offline
   digitalWrite(pinLB, LOW);
   digitalWrite(pinRB, LOW);
-
-  // forward wheels going forward
   digitalWrite(pinLF, HIGH);
   digitalWrite(pinRF, HIGH);
-
-  correction();
 }
 
-void turnLeft(int angle)
+void left()
 {
-  while(integral < angle)
+  digitalWrite(pinLB, LOW);
+  digitalWrite(pinRB, HIGH);
+  digitalWrite(pinLF, HIGH);
+  digitalWrite(pinRF, LOW);
+}
+
+void stopp()
+{
+  digitalWrite(pinLB, HIGH);
+  digitalWrite(pinRB, LOW);
+  digitalWrite(pinLF, HIGH);
+  digitalWrite(pinRF, LOW);
+}
+
+void right()
+{
+  digitalWrite(pinLB, HIGH);
+  digitalWrite(pinRB, LOW);
+  digitalWrite(pinLF, LOW);
+  digitalWrite(pinRF, HIGH);
+}
+
+void turn(void (*dir)(), int angle)
+{
+  int start = integral;
+  stopp();
+  while(abs(integral - start) < angle)
   {
-    digitalWrite(pinLB, LOW);
-    digitalWrite(pinRB, HIGH);
-    digitalWrite(pinLF, HIGH);
-    digitalWrite(pinRF, LOW);
+    readData();
+    (*dir)();
   }
-
-  integral = 0;
-  forward();
+  stopp();
 }
 
-void correction()
+void readData()
 {
-  if (integral > 5)
-    turnLeft(-integral);
+  MPU6050_ReadData();
+  integral += (gyro_z_scalled + correction_factor) * dt / 1000;
+  Serial.println(integral);
+  while((millis()-t) < dt){ // Making sure the cycle time is equal to dt  // И это тоже
+  // Do nothing
+  }
 }
