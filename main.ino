@@ -1,15 +1,19 @@
+#include <Servo2.h>
+
 #include <StaticThreadController.h>
 #include <Thread.h>
 #include <ThreadController.h>
 
 #include <Wire.h>
 #include "gyro_accel.h"
-#include <Servo.h>
 
 // Defining constants
-#define dt 20                       // time difference in milli seconds
+#define dt 80                       // time difference in milli seconds; должен соответсововать хотя бы примерно времени работы loop
 #define rad2degree 57.3              // Radian to degree conversion
 #define Filter_gain 0.95             // e.g.  angle = angle_gyro*Filter_gain + angle_accel*(1-Filter_gain)
+#define correction_factor 0.9
+#define rotation_factor 1.667
+#define turn_speed 150
 
 // wheels
 #define pinLB 2
@@ -44,10 +48,10 @@
 // *********************************************************************
 unsigned long t=0; // Time Variables
 float angle_x_gyro=0,angle_y_gyro=0,angle_z_gyro=0,angle_x_accel=0,angle_y_accel=0,angle_z_accel=0,angle_x=0,angle_y=0,angle_z=0;
-float integral=0, t0, correction_factor;
+float integral=0, t0;
 bool f;
 
-Servo servo;
+Servo2 servo;
 int directionn = 0; //front=8, back=2, left=4, right=6
 
 Thread angleThread = Thread();
@@ -69,6 +73,8 @@ void setup(){
   pinMode(pinLF, OUTPUT);
   pinMode(pinRB, OUTPUT);
   pinMode(pinRF, OUTPUT);
+  pinMode(Lpwm_pin, INPUT);
+  pinMode(Rpwm_pin, INPUT);
 
   pinMode(inputPin, INPUT);
   pinMode(outputPin, OUTPUT);
@@ -78,27 +84,14 @@ void setup(){
   t=millis(); 
   f = true;
 
-  float z0 = gyro_z_scalled;
-  while((millis()-t) < 10 * dt){ // Making sure the cycle time is equal to dt  // И это тоже
-  // Do nothing
-  }
-  correction_factor = (gyro_z_scalled - z0) / 10;
-
   angleThread.onRun(readData);
   angleThread.setInterval(dt);
 }
+
 void loop(){
   t=millis(); 
   
   MPU6050_ReadData();
- 
-  //Serial.print(gyro_z_scalled);
-  //Serial.print("\t");
-  /*integral += (gyro_z_scalled + correction_factor) * dt / 1000;
-  Serial.print(integral);
-  Serial.print("\t");
-
-  Serial.println(((float)(millis()-t)/(float)dt)*100);  // Не знаю, что это, но без этого не работает. Магия!*/
 
   if (angleThread.shouldRun())
     angleThread.run();
@@ -109,7 +102,7 @@ void loop(){
     f = false;
   }
   else
-    forward();
+    ;//stopp();
 }
 
 void forward()
@@ -148,6 +141,8 @@ void turn(void (*dir)(), int angle)
 {
   int start = integral;
   stopp();
+  analogWrite(Lpwm_pin, turn_speed);
+  analogWrite(Rpwm_pin, turn_speed);
   while(abs(integral - start) < angle)
   {
     if (angleThread.shouldRun())
@@ -155,15 +150,13 @@ void turn(void (*dir)(), int angle)
     (*dir)();
   }
   stopp();
+  analogWrite(Lpwm_pin, 255);
+  analogWrite(Rpwm_pin, 255);
 }
 
 void readData()
 {
   MPU6050_ReadData();
-  //integral += (gyro_z_scalled + correction_factor) * dt / 1000;
-  integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000;
+  integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000 / correction_factor;
   Serial.println(integral);
-  /*while((millis()-t) < dt){ // Making sure the cycle time is equal to dt  // И это тоже
-  // Do nothing
-  }*/
 }
