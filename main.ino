@@ -81,9 +81,6 @@ void setup(){
   pinMode(outputPin, OUTPUT);
 
   servo.attach(3);
-    
-  t=millis(); 
-  f = true;
 
   angleThread.onRun(readData);
   angleThread.setInterval(dt);
@@ -96,8 +93,6 @@ void setup(){
 }
 
 void loop(){
-  t=millis(); 
-  
   MPU6050_ReadData();
 
   if (angleThread.shouldRun())
@@ -140,7 +135,7 @@ void right()
   digitalWrite(pinRF, HIGH);
 }
 
-void turn(void (*dir)(), int angle)
+void turn(void (*dir)(), int angle, bool corr = false)
 {
   int start = integral;
   stopp();
@@ -151,18 +146,19 @@ void turn(void (*dir)(), int angle)
     (*dir)();
   }
   stopp();
-  integral = 0;
+  if (!corr)  // Если мы именно поворачиваем, а не корректируем снос вправо
+    integral = 0;
 }
 
 void readData()
 {
   MPU6050_ReadData();
-  integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000 / correction_factor;
+  integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000 / correction_factor;  // Угол поворота считаем как интеграл gyro_z_scalled по времени
   Serial.println(integral);
 }
 
-void correction()
+void correction() // Исправляет снос вправо
 {
-  if (integral < -15)
-    turn(left, abs(integral));
+  if (integral < -10)
+    turn(left, abs(integral), true);
 }
