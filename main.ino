@@ -13,7 +13,7 @@
 #define Filter_gain 0.95             // e.g.  angle = angle_gyro*Filter_gain + angle_accel*(1-Filter_gain)
 #define correction_factor 0.9
 #define rotation_factor 1.667
-#define turn_speed 150
+#define speed_factor 150
 
 // wheels
 #define pinLB 2
@@ -55,6 +55,7 @@ Servo2 servo;
 int directionn = 0; //front=8, back=2, left=4, right=6
 
 Thread angleThread = Thread();
+Thread corrThread = Thread();
 // *********************************************************************
 // Main Code
 void setup(){
@@ -86,6 +87,12 @@ void setup(){
 
   angleThread.onRun(readData);
   angleThread.setInterval(dt);
+
+  corrThread.onRun(correction);
+  corrThread.setInterval(dt);
+
+  analogWrite(Lpwm_pin, speed_factor);
+  analogWrite(Rpwm_pin, speed_factor);
 }
 
 void loop(){
@@ -96,17 +103,13 @@ void loop(){
   if (angleThread.shouldRun())
     angleThread.run();
 
-  if (f)
-  {
-    turn(left, 90);
-    f = false;
-  }
-  else
-    ;//stopp();
+  forward();
 }
 
 void forward()
 {
+  if (corrThread.shouldRun())
+    corrThread.run();
   digitalWrite(pinLB, LOW);
   digitalWrite(pinRB, LOW);
   digitalWrite(pinLF, HIGH);
@@ -141,8 +144,6 @@ void turn(void (*dir)(), int angle)
 {
   int start = integral;
   stopp();
-  analogWrite(Lpwm_pin, turn_speed);
-  analogWrite(Rpwm_pin, turn_speed);
   while(abs(integral - start) < angle)
   {
     if (angleThread.shouldRun())
@@ -150,8 +151,7 @@ void turn(void (*dir)(), int angle)
     (*dir)();
   }
   stopp();
-  analogWrite(Lpwm_pin, 255);
-  analogWrite(Rpwm_pin, 255);
+  integral = 0;
 }
 
 void readData()
@@ -159,4 +159,10 @@ void readData()
   MPU6050_ReadData();
   integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000 / correction_factor;
   Serial.println(integral);
+}
+
+void correction()
+{
+  if (integral < -15)
+    turn(left, abs(integral));
 }
