@@ -1,9 +1,8 @@
+#include <NewPing.h>
 #include <Servo2.h>
-
 #include <StaticThreadController.h>
 #include <Thread.h>
 #include <ThreadController.h>
-
 #include <Wire.h>
 #include "gyro_accel.h"
 
@@ -43,12 +42,14 @@
 #define Rgo 6
 #define Lgo 4
 #define Bgo 2
+
+#define minDist 15
 // *********************************************************************
 //    Global Variables
 // *********************************************************************
 unsigned long t=0; // Time Variables
 float angle_x_gyro=0,angle_y_gyro=0,angle_z_gyro=0,angle_x_accel=0,angle_y_accel=0,angle_z_accel=0,angle_x=0,angle_y=0,angle_z=0;
-float integral=0, t0;
+float integral=0, t0, distL, distF, distR;
 bool f;
 
 Servo2 servo;
@@ -56,7 +57,25 @@ int directionn = 0; //front=8, back=2, left=4, right=6
 
 Thread angleThread = Thread();
 Thread corrThread = Thread();
+Thread detectionThread = Thread();
+
+NewPing sonar(outputPin, inputPin, 400);
 // *********************************************************************
+void turn(void (*dir)(), int angle, bool corr = false)
+{
+  int start = integral;
+  stopp();
+  while(abs(integral - start) < angle)
+  {
+    if (angleThread.shouldRun())
+      angleThread.run();
+    (*dir)();
+  }
+  stopp();
+  if (!corr)  // Если мы именно поворачиваем, а не корректируем снос вправо
+    integral = 0;
+}
+
 // Main Code
 void setup(){
   Serial.begin(9600);
@@ -88,6 +107,9 @@ void setup(){
   corrThread.onRun(correction);
   corrThread.setInterval(dt);
 
+  detectionThread.onRun(detection);
+  detectionThread.setInterval(750);
+
   analogWrite(Lpwm_pin, speed_factor);
   analogWrite(Rpwm_pin, speed_factor);
 }
@@ -98,7 +120,10 @@ void loop(){
   if (angleThread.shouldRun())
     angleThread.run();
 
-  forward();
+  if (detectionThread.shouldRun())
+    detectionThread.run();
+
+  
 }
 
 void forward()
@@ -135,30 +160,54 @@ void right()
   digitalWrite(pinRF, HIGH);
 }
 
-void turn(void (*dir)(), int angle, bool corr = false)
-{
-  int start = integral;
-  stopp();
-  while(abs(integral - start) < angle)
-  {
-    if (angleThread.shouldRun())
-      angleThread.run();
-    (*dir)();
-  }
-  stopp();
-  if (!corr)  // Если мы именно поворачиваем, а не корректируем снос вправо
-    integral = 0;
-}
-
 void readData()
 {
   MPU6050_ReadData();
   integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000 / correction_factor;  // Угол поворота считаем как интеграл gyro_z_scalled по времени
-  Serial.println(integral);
+  //Serial.println(integral);
 }
 
 void correction() // Исправляет снос вправо
 {
   if (integral < -10)
     turn(left, abs(integral), true);
+}
+
+void detection()   // n - угол поворота сервы (0 - право, 180 - лево, 90 - прямо)
+{
+  servo.write(0);
+  delay(30);
+  digitalWrite(outputPin, LOW); // ultrasonic launching low voltage at 2μs
+  delayMicroseconds(2);
+  digitalWrite(outputPin, HIGH); // ultrasonic launching high voltage at 10μs，at least at10μs
+  delayMicroseconds(10);
+  digitalWrite(outputPin, LOW); // keeping ultrasonic launching low voltage
+  distL = pulseIn(inputPin, HIGH); // time of error reading
+  distL = distL/5.8/10; // converting time into distance（unit：cm）
+
+  delay(250);
+
+  servo.write(90);
+  delay(30);
+  digitalWrite(outputPin, LOW); // ultrasonic launching low voltage at 2μs
+  delayMicroseconds(2);
+  digitalWrite(outputPin, HIGH); // ultrasonic launching high voltage at 10μs，at least at10μs
+  delayMicroseconds(10);
+  digitalWrite(outputPin, LOW); // keeping ultrasonic launching low voltage
+  distF = pulseIn(inputPin, HIGH); // time of error reading
+  distF = distF/5.8/10; // converting time into distance（unit：cm）
+
+  delay(250);
+
+  servo.write(180);
+  delay(30);
+  digitalWrite(outputPin, LOW); // ultrasonic launching low voltage at 2μs
+  delayMicroseconds(2);
+  digitalWrite(outputPin, HIGH); // ultrasonic launching high voltage at 10μs，at least at10μs
+  delayMicroseconds(10);
+  digitalWrite(outputPin, LOW); // keeping ultrasonic launching low voltage
+  distR = pulseIn(inputPin, HIGH); // time of error reading
+  distR = distR/5.8/10; // converting time into distance（unit：cm）
+
+  Serial.println(distL);
 }
