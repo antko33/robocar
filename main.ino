@@ -1,4 +1,3 @@
-#include <NewPing.h>
 #include <Servo2.h>
 #include <StaticThreadController.h>
 #include <Thread.h>
@@ -41,7 +40,7 @@
 #define Fgo 8
 #define Rgo 6
 #define Lgo 4
-#define Bgo 2
+#define S 5
 
 #define minDist 15
 // *********************************************************************
@@ -51,6 +50,9 @@ unsigned long t=0; // Time Variables
 float angle_x_gyro=0,angle_y_gyro=0,angle_z_gyro=0,angle_x_accel=0,angle_y_accel=0,angle_z_accel=0,angle_x=0,angle_y=0,angle_z=0;
 float integral=0, t0, distL, distF, distR;
 bool f;
+int mode = -1; // 0 - авто, 1 - ручной
+int dir = S; // направление движения
+int val = -1;
 
 Servo2 servo;
 int directionn = 0; //front=8, back=2, left=4, right=6
@@ -58,8 +60,6 @@ int directionn = 0; //front=8, back=2, left=4, right=6
 Thread angleThread = Thread();
 Thread corrThread = Thread();
 Thread detectionThread = Thread();
-
-NewPing sonar(outputPin, inputPin, 400);
 // *********************************************************************
 void turn(void (*dir)(), int angle, bool corr = false)
 {
@@ -87,6 +87,7 @@ void setup(){
   MPU6050_SetDLPF(0); // Setting the DLPF to inf Bandwidth for calibration
   MPU6050_OffsetCal();
   MPU6050_SetDLPF(6); // Setting the DLPF to lowest Bandwidth
+  MPU6050_ReadData();
 
   // motors, servo, ultrasonic
   pinMode(pinLB, OUTPUT);
@@ -115,15 +116,12 @@ void setup(){
 }
 
 void loop(){
-  MPU6050_ReadData();
-
   if (angleThread.shouldRun())
     angleThread.run();
 
-  if (detectionThread.shouldRun())
-    detectionThread.run();
-
-  
+  ReadCommand();
+  if (mode == 1)
+    ManualModeGo();
 }
 
 void forward()
@@ -164,7 +162,6 @@ void readData()
 {
   MPU6050_ReadData();
   integral += (int)(gyro_z_scalled * 10.0) / 10.0 * dt / 1000 / correction_factor;  // Угол поворота считаем как интеграл gyro_z_scalled по времени
-  //Serial.println(integral);
 }
 
 void correction() // Исправляет снос вправо
@@ -208,6 +205,33 @@ void detection()   // n - угол поворота сервы (0 - право, 
   digitalWrite(outputPin, LOW); // keeping ultrasonic launching low voltage
   distR = pulseIn(inputPin, HIGH); // time of error reading
   distR = distR/5.8/10; // converting time into distance（unit：cm）
+}
 
-  Serial.println(distL);
+void ReadCommand()
+{
+  int val = Serial.read();
+  if (val == '0')
+    mode = 0;
+  else if (val == '1')
+    mode = 1;
+  else if (val == '4' && mode == 1)
+    dir = Lgo;
+  else if (val == '6' && mode == 1)
+    dir = Rgo;
+  else if (val == '8' && mode == 1)
+    dir = Fgo;
+  else if (val == '5')
+    dir = S;
+}
+
+void ManualModeGo()
+{
+  if (dir == S)
+    stopp();
+  else if (dir == Fgo)
+    forward();
+  else if (dir == Rgo)
+    turn(right, 5);
+  else if (dir == Lgo)
+    turn(left, 5);
 }
