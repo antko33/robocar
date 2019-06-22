@@ -55,7 +55,6 @@ int dir = S; // направление движения
 int val = -1;
 
 Servo2 servo;
-int directionn = 0; //front=8, back=2, left=4, right=6
 
 Thread angleThread = Thread();
 Thread corrThread = Thread();
@@ -122,6 +121,16 @@ void loop(){
   ReadCommand();
   if (mode == 1)
     ManualModeGo();
+  else if (mode == 0)
+  {
+    if (detectionThread.shouldRun())
+      detectionThread.run();
+      
+    if (dir != S)
+      AutoModeGo();
+    else
+      stopp();
+  }
 }
 
 void forward()
@@ -186,34 +195,42 @@ void detection()   // n - угол поворота сервы (0 - право, 
 
   servo.write(90);
   delay(30);
-  digitalWrite(outputPin, LOW); // ultrasonic launching low voltage at 2μs
+  digitalWrite(outputPin, LOW); 
   delayMicroseconds(2);
-  digitalWrite(outputPin, HIGH); // ultrasonic launching high voltage at 10μs，at least at10μs
+  digitalWrite(outputPin, HIGH);
   delayMicroseconds(10);
-  digitalWrite(outputPin, LOW); // keeping ultrasonic launching low voltage
-  distF = pulseIn(inputPin, HIGH); // time of error reading
-  distF = distF/5.8/10; // converting time into distance（unit：cm）
+  digitalWrite(outputPin, LOW); 
+  distF = pulseIn(inputPin, HIGH);
+  distF = distF/5.8/10;
 
   delay(250);
 
   servo.write(180);
   delay(30);
-  digitalWrite(outputPin, LOW); // ultrasonic launching low voltage at 2μs
+  digitalWrite(outputPin, LOW); 
   delayMicroseconds(2);
-  digitalWrite(outputPin, HIGH); // ultrasonic launching high voltage at 10μs，at least at10μs
+  digitalWrite(outputPin, HIGH);
   delayMicroseconds(10);
-  digitalWrite(outputPin, LOW); // keeping ultrasonic launching low voltage
-  distR = pulseIn(inputPin, HIGH); // time of error reading
-  distR = distR/5.8/10; // converting time into distance（unit：cm）
+  digitalWrite(outputPin, LOW); 
+  distR = pulseIn(inputPin, HIGH);
+  distR = distR/5.8/10;
 }
 
 void ReadCommand()
 {
   int val = Serial.read();
   if (val == '0')
+  {
+    if (mode == 1)  // При смене режима (не волнуйтесь, товарищ майор, это не то) было бы неплохо остановить устройство
+      stopp();
     mode = 0;
+  }
   else if (val == '1')
+  {
+    if (mode == 0)
+      stopp();
     mode = 1;
+  }
   else if (val == '4' && mode == 1)
     dir = Lgo;
   else if (val == '6' && mode == 1)
@@ -234,4 +251,9 @@ void ManualModeGo()
     turn(right, 5);
   else if (dir == Lgo)
     turn(left, 5);
+}
+
+void AutoModeGo()
+{
+  
 }
