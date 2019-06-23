@@ -94,6 +94,8 @@ void setup(){
   MPU6050_SetDLPF(6); // Setting the DLPF to lowest Bandwidth
   MPU6050_ReadData();
 
+  Serial.println(3);
+
   // motors, servo, ultrasonic
   pinMode(pinLB, OUTPUT);
   pinMode(pinLF, OUTPUT);
@@ -128,7 +130,7 @@ void loop(){
   if (mode == 1)
     ManualModeGo();
   else if (mode == 0)    
-      AutoModeGo();
+    AutoModeGo();
 }
 
 void forward()
