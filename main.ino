@@ -2,10 +2,9 @@
 // Настройки прошивки
 // *******************
 
-#define speed_factor_left 150   // Скорость вращения левых колёс (0-255)
-#define speed_factor_right 255  // -//-              правых -//-
-#define min_dist 15   //Минимальное расстояние до препятствия, см
-#define delay_time 500  // Время для выполнения 1 замера расстояния, мс
+#define speed_factor_left 138   // Скорость вращения левых колёс (0-255)
+#define speed_factor_right 235  // -//-              правых -//-
+#define min_dist 20   //Минимальное расстояние до препятствия, см
 
 // *******************
 
@@ -22,6 +21,7 @@
 #define Filter_gain 0.95             // e.g.  angle = angle_gyro*Filter_gain + angle_accel*(1-Filter_gain)
 #define correction_factor 0.9
 #define rotation_factor 1.667
+#define delay_time 500  // Время для выполнения 1 замера расстояния, мс
 
 // wheels
 #define pinLB 2
@@ -32,8 +32,6 @@
 // adjusting speed
 #define Lpwm_pin 5
 #define Rpwm_pin 10
-#define Lpwm_val 50
-#define Rpwm_val 50
 
 // ultrasonic sensor
 #define inputPin A0
@@ -78,7 +76,7 @@ void turn(void (*dir)(), int angle, bool corr = false)
   }
   stopp();
   if (!corr)  // Если мы именно поворачиваем, а не корректируем снос вправо
-    integral = 0;
+    integral = integral;
 }
 
 // Main Code
@@ -107,7 +105,7 @@ void setup(){
   pinMode(inputPin, INPUT);
   pinMode(outputPin, OUTPUT);
 
-  servo.attach(3);
+  //servo.attach(3);
 
   angleThread.onRun(readData);
   angleThread.setInterval(dt);
@@ -118,19 +116,25 @@ void setup(){
   detectionThread.onRun(detection);
   detectionThread.setInterval(500);
 
-  analogWrite(Lpwm_pin, speed_factor_left);
-  analogWrite(Rpwm_pin, speed_factor_right);
+  analogWrite(Rpwm_pin, speed_factor_left);
+  analogWrite(Lpwm_pin, speed_factor_right);
 }
 
 void loop(){
   if (angleThread.shouldRun())
     angleThread.run();
 
+  /*turn(right, 90);
+  delay(1000);
+  turn(left, 90);*/
+
   ReadCommand();
   if (mode == 1)
     ManualModeGo();
   else if (mode == 0)    
     AutoModeGo();
+
+  //forward();
 }
 
 void forward()
@@ -141,6 +145,12 @@ void forward()
   digitalWrite(pinRB, LOW);
   digitalWrite(pinLF, HIGH);
   digitalWrite(pinRF, HIGH);
+
+  if (mode == 0)
+  {
+    delay(500);
+    stopp();
+  }
 }
 
 void left()
@@ -177,6 +187,8 @@ void correction() // Исправляет снос вправо
 {
   if (integral < -10)
     turn(left, abs(integral), true);
+  /*else if (integral > 10)
+    turn(right, abs(integral), true);*/
 }
 
 float detection(int n)   // n - угол поворота сервы (0 - право, 180 - лево, 90 - прямо)
@@ -221,6 +233,7 @@ void ReadCommand()
 
 void ManualModeGo()
 {
+  servo.detach();
   if (dir == S)
     stopp();
   else if (dir == Fgo)
@@ -233,22 +246,27 @@ void ManualModeGo()
 
 void AutoModeGo()
 {
+  servo.attach(3);
   distL = detection(180);
   delay(delay_time / 50); 
   distF = detection(90);
   delay(delay_time / 50);
   
   if (distL > min_dist)
-    Serial.println("LEFT");
+    //Serial.println("LEFT");
+    turn(left, 90);
   else if (distF > min_dist)
-    Serial.println("FWD");
+    //Serial.println("FWD");
+    forward();
   else
   {
     distR = detection(0);
     delay(delay_time / 50);
     if (distR > min_dist)
-      Serial.println("RIGHT");
+      //Serial.println("RIGHT");
+      turn(right, 90);
     else
-      Serial.println("REVOLUTION");
+      //Serial.println("REVOLUTION");
+      turn(left, 180);
   }
 }
