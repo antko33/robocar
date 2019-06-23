@@ -1,3 +1,14 @@
+// *******************
+// Настройки прошивки
+// *******************
+
+#define speed_factor_left 150   // Скорость вращения левых колёс (0-255)
+#define speed_factor_right 255  // -//-              правых -//-
+#define min_dist 15   //Минимальное расстояние до препятствия, см
+#define delay_time 500  // Время для выполнения 1 замера расстояния, мс
+
+// *******************
+
 #include <Servo2.h>
 #include <StaticThreadController.h>
 #include <Thread.h>
@@ -11,7 +22,6 @@
 #define Filter_gain 0.95             // e.g.  angle = angle_gyro*Filter_gain + angle_accel*(1-Filter_gain)
 #define correction_factor 0.9
 #define rotation_factor 1.667
-#define speed_factor 150
 
 // wheels
 #define pinLB 2
@@ -34,21 +44,17 @@
 #define Rspeed 0
 #define Lspeed 0
 
-#define delay_time 250
-
 // directions
 #define Fgo 8
 #define Rgo 6
 #define Lgo 4
 #define S 5
-
-#define minDist 15
 // *********************************************************************
 //    Global Variables
 // *********************************************************************
 unsigned long t=0; // Time Variables
 float angle_x_gyro=0,angle_y_gyro=0,angle_z_gyro=0,angle_x_accel=0,angle_y_accel=0,angle_z_accel=0,angle_x=0,angle_y=0,angle_z=0;
-float integral=0, t0, distL, distF, distR;
+float integral=0, t0, distL, distF, distR, d1, d2;
 bool f;
 int mode = -1; // 0 - авто, 1 - ручной
 int dir = S; // направление движения
@@ -108,10 +114,10 @@ void setup(){
   corrThread.setInterval(dt);
 
   detectionThread.onRun(detection);
-  detectionThread.setInterval(750);
+  detectionThread.setInterval(500);
 
-  analogWrite(Lpwm_pin, speed_factor);
-  analogWrite(Rpwm_pin, speed_factor);
+  analogWrite(Lpwm_pin, speed_factor_left);
+  analogWrite(Rpwm_pin, speed_factor_right);
 }
 
 void loop(){
@@ -121,16 +127,8 @@ void loop(){
   ReadCommand();
   if (mode == 1)
     ManualModeGo();
-  else if (mode == 0)
-  {
-    if (detectionThread.shouldRun())
-      detectionThread.run();
-      
-    if (dir != S)
+  else if (mode == 0)    
       AutoModeGo();
-    else
-      stopp();
-  }
 }
 
 void forward()
@@ -179,41 +177,19 @@ void correction() // Исправляет снос вправо
     turn(left, abs(integral), true);
 }
 
-void detection()   // n - угол поворота сервы (0 - право, 180 - лево, 90 - прямо)
+float detection(int n)   // n - угол поворота сервы (0 - право, 180 - лево, 90 - прямо)
 {
-  servo.write(0);
-  delay(30);
+  float dist;
+  servo.write(n);
+  delay(delay_time);
   digitalWrite(outputPin, LOW); // ultrasonic launching low voltage at 2μs
   delayMicroseconds(2);
   digitalWrite(outputPin, HIGH); // ultrasonic launching high voltage at 10μs，at least at10μs
   delayMicroseconds(10);
   digitalWrite(outputPin, LOW); // keeping ultrasonic launching low voltage
-  distL = pulseIn(inputPin, HIGH); // time of error reading
-  distL = distL/5.8/10; // converting time into distance（unit：cm）
-
-  delay(250);
-
-  servo.write(90);
-  delay(30);
-  digitalWrite(outputPin, LOW); 
-  delayMicroseconds(2);
-  digitalWrite(outputPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(outputPin, LOW); 
-  distF = pulseIn(inputPin, HIGH);
-  distF = distF/5.8/10;
-
-  delay(250);
-
-  servo.write(180);
-  delay(30);
-  digitalWrite(outputPin, LOW); 
-  delayMicroseconds(2);
-  digitalWrite(outputPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(outputPin, LOW); 
-  distR = pulseIn(inputPin, HIGH);
-  distR = distR/5.8/10;
+  dist = pulseIn(inputPin, HIGH); // time of error reading
+  dist = dist/5.8/10; // converting time into distance（unit：cm）
+  return dist;
 }
 
 void ReadCommand()
@@ -255,5 +231,22 @@ void ManualModeGo()
 
 void AutoModeGo()
 {
+  distL = detection(180);
+  delay(delay_time / 50); 
+  distF = detection(90);
+  delay(delay_time / 50);
   
+  if (distL > min_dist)
+    Serial.println("LEFT");
+  else if (distF > min_dist)
+    Serial.println("FWD");
+  else
+  {
+    distR = detection(0);
+    delay(delay_time / 50);
+    if (distR > min_dist)
+      Serial.println("RIGHT");
+    else
+      Serial.println("REVOLUTION");
+  }
 }
